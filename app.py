@@ -4,7 +4,15 @@ from flask_cors import CORS
 import random
 
 app = Flask(__name__)
+# JSON 응답 시 ASCII가 아닌 문자를 이스케이프 처리하지 않도록 설정합니다.
+app.config['JSON_AS_ASCII'] = False
 
+@app.route('/decision')
+def get_decision():
+    data = {"decision": "네, 좋은 생각이에요! 👍"}
+    return jsonify(data)
+
+# ... (이하 코드)
 # 모든 도메인에서의 요청을 허용합니다.
 CORS(app)
 
