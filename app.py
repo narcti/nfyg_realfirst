@@ -1,21 +1,36 @@
+# -*- coding: utf-8 -*-
 from flask import Flask, jsonify
+from flask_cors import CORS
 import random
 
-# Flask 애플리케이션을 생성합니다.
 app = Flask(__name__)
 
-# '/api/random' URL 경로에 대한 함수를 정의합니다.
-# 이 경로로 GET 요청이 오면 이 함수가 실행됩니다.
+# 모든 도메인에서의 요청을 허용합니다.
+CORS(app)
+
 @app.route('/api/random')
 def random_number():
     """1부터 99 사이의 랜덤한 정수를 생성하고 JSON 형태로 반환합니다."""
     number = random.randint(1, 99)
-    # 생성된 숫자를 'number'라는 키와 함께 딕셔너리로 만듭니다.
-    # jsonify는 딕셔너리를 JSON 응답으로 변환해줍니다.
     return jsonify({'number': number})
 
-# 이 스크립트가 직접 실행될 때 웹 서버를 구동합니다.
-# render.com과 같은 서비스는 이 부분을 사용하여 앱을 실행합니다.
+# 새로 추가된 API 엔드포인트
+@app.route('/api/decision')
+def decision_maker():
+    """미리 정의된 응답 리스트에서 하나를 랜덤으로 선택하여 JSON 형태로 반환합니다."""
+    answers = [
+        "네, 좋은 생각이에요! 👍",
+        "음, 다시 생각해 보세요. 🤔",
+        "당장 시작하세요! 🔥",
+        "별로 좋은 선택은 아닌 것 같아요. 👎",
+        "물론이죠! 왜 망설이세요? 😄",
+        "오늘은 좀 쉬는 게 어때요? 😴",
+        "확신할 수 없어요. 동전을 던져보세요! 🪙"
+    ]
+    decision = random.choice(answers)
+    return jsonify({'decision': decision})
+
 if __name__ == '__main__':
-    # host='0.0.0.0'은 외부에서 접속 가능하도록 설정합니다.
+    # Render.com과 같은 클라우드 환경에서는 Gunicorn을 사용하므로,
+    # 이 부분은 로컬 테스트용으로 사용됩니다.
     app.run(host='0.0.0.0', port=5000)
