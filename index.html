@@ -1,41 +1,235 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Past Forward</title>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>움직이는 GIF 검색기</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Permanent+Marker&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom Font for Korean -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-      body {
-        font-family: 'Roboto', sans-serif;
-      }
-      .font-caveat {
-        font-family: 'Caveat', cursive;
-      }
-      .font-permanent-marker {
-        font-family: 'Permanent Marker', cursive;
-      }
+        /* 기본 폰트 설정 */
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+        }
+        /* 로딩 스피너 애니메이션 */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* 그리드 아이템이 잘리지 않도록 설정 */
+        .grid-item {
+            break-inside: avoid;
+        }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.14.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-    "react/": "https://esm.sh/react@^19.1.1/",
-    "react": "https://esm.sh/react@^19.1.1",
-    "tailwind-merge": "https://esm.sh/tailwind-merge@^3.3.1",
-    "framer-motion": "https://esm.sh/framer-motion@^12.23.12",
-    "clsx": "https://esm.sh/clsx@^2.1.1"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">움직이는 GIF 검색기 🚀</h1>
+            <p class="mt-2 text-gray-600 dark:text-gray-400">원하는 키워드로 재미있는 GIF를 찾아보세요.</p>
+        </header>
+
+        <!-- 검색창 -->
+        <div class="max-w-2xl mx-auto mb-8">
+            <div class="flex items-center rounded-full bg-white dark:bg-gray-800 shadow-lg p-2">
+                <input type="text" id="searchInput" placeholder="예: 고양이, 환호, 놀람..." class="w-full bg-transparent border-none focus:ring-0 text-lg px-4 py-2 text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500">
+                <button id="searchButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full transition-colors duration-300">
+                    검색
+                </button>
+            </div>
+        </div>
+
+        <!-- 결과 표시 영역 -->
+        <div id="results-container" class="w-full">
+            <!-- 초기 안내 메시지 -->
+            <div id="initial-message" class="text-center text-gray-500 dark:text-gray-400 py-16">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">검색 결과가 여기에 표시됩니다.</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">위 검색창에 키워드를 입력하고 검색 버튼을 눌러주세요.</p>
+            </div>
+            <!-- 로딩 인디케이터 -->
+            <div id="loader" class="hidden justify-center items-center py-16">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 복사 성공 알림 메시지 (토스트) -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-xl opacity-0 transform translate-y-2 transition-all duration-300">
+        주소가 클립보드에 복사되었습니다!
+    </div>
+
+
+    <script>
+        // DOM 요소 가져오기
+        const searchInput = document.getElementById('searchInput');
+        const searchButton = document.getElementById('searchButton');
+        const resultsContainer = document.getElementById('results-container');
+        const loader = document.getElementById('loader');
+        const initialMessage = document.getElementById('initial-message');
+        const toast = document.getElementById('toast');
+
+        // Tenor API 설정 (Public API Key 사용)
+        const API_KEY = 'LIVDSRZULELA';
+        const LIMIT = 24;
+
+        // 검색 실행 함수
+        const searchGifs = async () => {
+            const searchTerm = searchInput.value.trim();
+            if (searchTerm === '') {
+                alert('검색어를 입력해주세요.');
+                return;
+            }
+
+            // UI 초기화 및 로딩 상태 표시
+            initialMessage.classList.add('hidden');
+            resultsContainer.innerHTML = ''; // 이전 결과 삭제
+            loader.classList.remove('hidden');
+            loader.classList.add('flex');
+            
+            try {
+                // Tenor API 호출
+                const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(searchTerm)}&key=${API_KEY}&limit=${LIMIT}&media_filter=minimal`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // 로딩 상태 숨기기
+                loader.classList.add('hidden');
+                loader.classList.remove('flex');
+                
+                // 결과 표시
+                displayResults(data.results);
+
+            } catch (error) {
+                console.error('GIF를 가져오는 중 오류 발생:', error);
+                loader.classList.add('hidden');
+                loader.classList.remove('flex');
+                resultsContainer.innerHTML = `<p class="text-center text-red-500">GIF를 불러오는 데 실패했습니다. 다시 시도해주세요.</p>`;
+            }
+        };
+
+        // 검색 결과를 화면에 표시하는 함수
+        const displayResults = (gifs) => {
+            resultsContainer.innerHTML = ''; // 컨테이너 비우기
+
+            if (gifs.length === 0) {
+                resultsContainer.innerHTML = `<p class="text-center text-gray-500 dark:text-gray-400">"${searchInput.value}"에 대한 검색 결과가 없습니다.</p>`;
+                return;
+            }
+
+            // Masonry 스타일의 그리드 컨테이너 생성
+            const gridContainer = document.createElement('div');
+            gridContainer.className = 'columns-2 md:columns-3 lg:columns-4 gap-4';
+
+            gifs.forEach(gif => {
+                const gifUrl = gif.media[0].gif.url;
+                const previewUrl = gif.media[0].tinygif.url;
+
+                // 각 GIF 아이템을 담을 컨테이너
+                const itemContainer = document.createElement('div');
+                itemContainer.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden mb-4 grid-item';
+                
+                // GIF 이미지
+                const img = document.createElement('img');
+                img.src = previewUrl;
+                img.alt = gif.content_description || 'GIF 이미지';
+                img.className = 'w-full h-auto object-cover';
+                img.onerror = () => { img.src = 'https://placehold.co/300x200/e2e8f0/334155?text=Error'; };
+
+                // 정보 및 복사 버튼 영역
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'p-3';
+
+                // GIF 주소 텍스트
+                const urlText = document.createElement('p');
+                urlText.textContent = gifUrl;
+                urlText.className = 'text-xs text-gray-500 dark:text-gray-400 truncate mb-2';
+                
+                // 복사 버튼
+                const copyButton = document.createElement('button');
+                copyButton.textContent = '주소 복사';
+                copyButton.className = 'w-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium py-2 px-3 rounded-md transition-colors duration-200';
+                
+                // 복사 버튼 클릭 이벤트
+                copyButton.addEventListener('click', () => {
+                    copyToClipboard(gifUrl, copyButton);
+                });
+
+                // 요소들을 DOM에 추가
+                infoDiv.appendChild(urlText);
+                infoDiv.appendChild(copyButton);
+                itemContainer.appendChild(img);
+                itemContainer.appendChild(infoDiv);
+                gridContainer.appendChild(itemContainer);
+            });
+            resultsContainer.appendChild(gridContainer);
+        };
+        
+        // 클립보드에 텍스트를 복사하는 함수
+        const copyToClipboard = (text, button) => {
+            // execCommand는 오래된 방식이지만 iframe 환경 등에서 호환성이 더 좋을 수 있습니다.
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                // 사용자에게 피드백 제공
+                const originalText = button.textContent;
+                button.textContent = '복사 완료!';
+                button.classList.add('bg-green-500', 'text-white');
+                
+                showToast();
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-green-500', 'text-white');
+                }, 2000);
+            } catch (err) {
+                console.error('클립보드 복사 실패:', err);
+                alert('클립보드 복사에 실패했습니다.');
+            }
+            document.body.removeChild(textArea);
+        };
+
+        // 토스트 메시지를 보여주는 함수
+        const showToast = () => {
+            toast.classList.remove('opacity-0', 'translate-y-2');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-2');
+            }, 3000);
+        };
+
+        // 이벤트 리스너 등록
+        searchButton.addEventListener('click', searchGifs);
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                searchGifs();
+            }
+        });
+
+    </script>
+</body>
 </html>
